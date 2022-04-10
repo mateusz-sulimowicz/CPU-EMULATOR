@@ -77,17 +77,20 @@ so_emul:
 	; argptr[core][D_REG] = &(state[core].D);
 	lea	r12, [state + r8 * SIZEOF_STATE + D_REG]
 	mov 	[r11 + D_REG], r12
-	mov	r13b, [r12]; r13 = state[core].D;
+	; r13b = state[core].D;
+	mov	r13b, [r12]
 
 	; argptr[core][X_REG] = &(state[core].X);
 	lea	r12, [state + r8 * SIZEOF_STATE + X_REG]
 	mov	[r11 + X_REG], r12
-	mov 	r14b, [r12]; r14 = state[core].Y;
+	; r14b = state[core].X
+	mov 	r14b, [r12]
 
 	; argptr[core][Y_REG] = &(state[core].Y);
 	lea	r12, [state + r8 * SIZEOF_STATE + Y_REG]
 	mov	[r11 + Y_REG], r12
-	mov	r15b, [r12]; r15 = state[core].Y
+	; r15b = state[core].Y;
+	mov	r15b, [r12]
 
 	; argptr[core][X_REF] = data + state[core].X;
 	lea	r12, [rcx + r14]
