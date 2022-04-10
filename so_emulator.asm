@@ -17,6 +17,12 @@ Y_REF		equ 5
 XD_REF		equ 6
 YD_REF		equ 7
 
+OP_MASK		equ 0xC000
+BINARY_OP	equ 0x0000
+UNARY_OP	equ 0x4000
+JMP_OP		equ 0x8000
+FLAG_OP		equ 0xC000
+
 ; To jest stan procesora SO.
 ; struct __attribute__((packed)) so_state_t {
 ; uint8_t A, D, X, Y, PC;
@@ -104,6 +110,8 @@ so_emul:
 	mov	[r11 + YD_REF], r12
 	
 	; ---------------------------------------
+
+
 
 .binary_op:
 .unary_op:
