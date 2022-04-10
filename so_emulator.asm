@@ -65,7 +65,7 @@ so_emul:
 	xor	r14, r14
 	xor	r15, r15
 
-	; r11 = argptr[core];
+	; r11 = &argptr[core];
 	mov 	rax, r8
 	shl	rax, 6
 	lea	r11, [argptr + rax]
