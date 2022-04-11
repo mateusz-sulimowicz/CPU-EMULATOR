@@ -141,16 +141,17 @@ so_emul:
 
 	and	r10w, OP_MASK ; r10w = typ instrukcji i 14 zer.
 
-	; ---- switch(operation_type) ----
-	cmp	r10w, UNARY_OP
-	je	.unary_op
+	; ---- switch(operation_type)
 	cmp	r10w, FLAG_OP
 	je	.flag_op
 	cmp	r10w, JMP_OP
 	je	.jmp_op
-.binary_op:
+	
 	mov	r14b, [r11 + r14] ; r14b = argptr[core][arg1_code];
-
+	
+	cmp	r10w, UNARY_OP
+	je	.unary_op
+.binary_op:
 	mov	r15, [r11 + r15]
 	mov	r15b, [r15] ; r15b = *argptr[core][arg2_code];
 
@@ -164,28 +165,25 @@ so_emul:
 
 	jmp	.after
 .flag_op:
-	shr	r12w, 8
-	mov	[r9 + C_FL], r12b
+	mov	[r9 + C_FL], r14b
 	jmp	.after
 .jmp_op:	
-	mov	r13b, r12b
-	shr	r12w, 8
-
 	mov	al, 1
-	add	al, r12b
-	shr	r12b, 1
+	; TODO petla?
+	add	al, r14b
+	shr	r14b, 1
 
-	mov	r14b, [r9 + C_FL]
-	and	r14b, r12b
-	add 	al, r14b
-	shr 	r12b, 1
+	mov	r15b, [r9 + C_FL]
+	and	r15b, r14b
+	add 	al, r15b
+	shr 	r14b, 1
 
-	mov	r14b, [r9 + Z_FL]
-	and	r14b, r12b
+	mov	r15b, [r9 + Z_FL]
+	and	r15b, r14b
 	add 	al, r14b
 
 	and	al, 1	
-	mul	r13b
+	mul	r13b ; TODO bez mnozenia
 	add 	[r9 + PC_CT], al
 	jmp	.after
 .after:
