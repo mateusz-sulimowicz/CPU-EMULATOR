@@ -17,6 +17,8 @@ Y_REF		equ 5
 XD_REF		equ 6
 YD_REF		equ 7
 
+BREAK_OP	equ 0xffff
+
 OP_MASK		equ 0xC000
 BINARY_OP	equ 0x0000
 UNARY_OP	equ 0x4000
@@ -49,12 +51,13 @@ section .text
 ; r8	- identyfikator rdzenia z [0, CORES).
 so_emul:
 	enter	0, 0
-	
+
+.next:	
 	; *rdi = state[core];
-	mov	r10, [state + r8 * SIZEOF_STATE]
+	lea	r9, [state + r8 * SIZEOF_STATE]
+	mov	r10, [r9]
 	mov 	[rdi], r10	
 
-.next_op:
 	test	rdx, rdx
 	jz	.done
 
@@ -71,23 +74,23 @@ so_emul:
 	lea	r11, [argptr + rax]
 
 	; argptr[core][A_REG] = &(state[core].A);
-	lea	r12, [state + r8 * SIZEOF_STATE + A_REG]
+	lea	r12, [r9 + A_REG]
 	mov	[r11 + A_REG], r12
 
 	; argptr[core][D_REG] = &(state[core].D);
-	lea	r12, [state + r8 * SIZEOF_STATE + D_REG]
+	lea	r12, [r9 + D_REG]
 	mov 	[r11 + D_REG], r12
 	; r13b = state[core].D;
 	mov	r13b, [r12]
 
 	; argptr[core][X_REG] = &(state[core].X);
-	lea	r12, [state + r8 * SIZEOF_STATE + X_REG]
+	lea	r12, [r9 + X_REG]
 	mov	[r11 + X_REG], r12
 	; r14b = state[core].X
 	mov 	r14b, [r12]
 
 	; argptr[core][Y_REG] = &(state[core].Y);
-	lea	r12, [state + r8 * SIZEOF_STATE + Y_REG]
+	lea	r12, [r9 + Y_REG]
 	mov	[r11 + Y_REG], r12
 	; r15b = state[core].Y;
 	mov	r15b, [r12]
@@ -111,17 +114,48 @@ so_emul:
 	add	al, r13b
 	lea	r12, [rcx + rax]
 	mov	[r11 + YD_REF], r12
-	
+
 	; ---------------------------------------
+	xor	r10, r10
+	xor	r12, r12
 
-
-
+	mov	r13b, [r9 + PC_CT]
+	mov	r10w, [rcx + 2 * r13]
+	mov	r12w, r10w
+	cmp	r10w, BREAK_OP
+	je	.done
+	
+	and	r10w, OP_MASK
+	; switch(OPERATION_TYPE)
+	cmp	r10w, UNARY_OP
+	je	.unary_op
+	cmp	r10w, FLAG_OP
+	je	.flag_op
+	cmp	r10w, JMP_OP
+	je	.jmp_op
 .binary_op:
+	
+
+
+	jmp	.after
 .unary_op:
+
+
+	jmp	.after
 .flag_op:
+	shr	r12w, 8
+	mov	[r9 + C_FL], r12b
+	jmp	.after
 .jmp_op:	
+	mov	r13b, r12b
+	shr	r12w, 8
+	
 
-
+	jmp	.after
+.after:
+	inc	byte [r9 + PC_CT]
+	dec	rdx
+	jmp	.next	
 .done:
 	leave
 	ret
