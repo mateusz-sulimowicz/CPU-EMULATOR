@@ -116,40 +116,51 @@ so_emul:
 	mov	[r11 + YD_REF], r12
 
 	; ---------------------------------------
+
 	xor	r10, r10
 	xor	r12, r12
 
-	mov	r13b, [r9 + PC_CT]
-	mov	r10w, [rcx + 2 * r13]
-	mov	r12w, r10w
-	cmp	r10w, BREAK_OP
+	; Kazda instrukcja jest postaci:
+	; [ TYP - 2 bity ][ A - 3 bity ][ B - 3 bity ][ C - 8 bitow ]
+
+	mov	r13b, [r9 + PC_CT] ; r13b = state[core].PC;
+	mov	r10w, [rcx + 2 * r13] ; r10w = code[r13b];
+	mov	r12w, r10w ; r12w = tresc instrukcji.
+
+	cmp	r10w, BREAK_OP ; Instrukcja BRK konczy wykonanie programu.
 	je	.done
+
+	mov	r13b, r12b ; r13b = pole C.
+	shr	r12w, 8
 	
-	and	r10w, OP_MASK
-	; switch(OPERATION_TYPE)
+	mov	r14b, r12b
+	and	r14b, 0x7 ; r14b = pole B.
+	shr	r12w, 3
+	
+	mov 	r15b, r12b ; r15b = pole A.
+
+	and	r10w, OP_MASK ; r10w = typ instrukcji i 14 zer.
+
+	; ---- switch(operation_type) ----
+	cmp	r10w, UNARY_OP
+	je	.unary_op
 	cmp	r10w, FLAG_OP
 	je	.flag_op
 	cmp	r10w, JMP_OP
 	je	.jmp_op
+.binary_op:
+	mov	r14b, [r11 + r14] ; r14b = argptr[core][arg1_code];
 
-	; r13b = op_num;
-	mov	r13b, r12b
-	shr	r12w, 8
-	
-	; r14b = argptr[core][arg1_code]
-	mov	r14b, r12b
-	and	r14b, 0x7
-	mov	r14b, [r11 + r14]
-	shr	r12w, 3
-	
-	; r15b = arg2_code
-	mov 	r15b, r12b
+	mov	r15, [r11 + r15]
+	mov	r15b, [r15] ; r15b = *argptr[core][arg2_code];
 
-	; if (op_type == UNARY_OP) swap(r13, r15);
-	cmp	r10w, UNARY_OP
-	cmove	rax, r13
-	cmove	r13, r15
-	cmove	r15, rax
+	jmp	.after
+.unary_op:
+	; ---- swap(r13b, r15b) ----
+	mov	al, r13b
+	mov	r13b, r15b
+	mov	r15b, al
+	; --------------------------
 
 	jmp	.after
 .flag_op:
