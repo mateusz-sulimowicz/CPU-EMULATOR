@@ -206,16 +206,16 @@ so_emul:
 	; default .mov
 	; --------------------------
 .mov:
-
+	jmp	.after
 .or:
-
+	jmp	.after
 .xor:
-
+	jmp	.after
 .add:
-
+	jmp	.after
 .cmpi:
+	jmp	.after
 .rcri:
-
 	jmp	.after
 .flag_op:
 	mov	[r9 + C_FL], r14b
