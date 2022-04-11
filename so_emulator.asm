@@ -149,14 +149,21 @@ so_emul:
 .jmp_op:	
 	mov	r13b, r12b
 	shr	r12w, 8
+
 	mov	al, 1
 	add	al, r12b
 	shr	r12b, 1
-	
-	
-	
-		
 
+	mov	r14b, [r9 + C_FL]
+	and	r14b, r12b
+	add 	al, r14b
+	shr 	r12b, 1
+
+	mov	r14b, [r9 + Z_FL]
+	and	r14b, r12b
+	add 	al, r14b
+
+	and	al, 1	
 	mul	r13b
 	add 	[r9 + PC_CT], al
 	jmp	.after
