@@ -25,6 +25,18 @@ UNARY_OP	equ 0x4000
 JMP_OP		equ 0x8000
 FLAG_OP		equ 0xC000
 
+MOV_OP		equ 0
+OR_OP		equ 2
+XOR_OP		equ 3
+ADD_OP		equ 4
+SUB_OP		equ 5
+ADC_OP		equ 6
+SBB_OP		equ 7
+XCHG_OP		equ 8
+
+CMPI_OP		equ 5
+RCRI_OP		equ 6
+
 ; To jest stan procesora SO.
 ; struct __attribute__((packed)) so_state_t {
 ; uint8_t A, D, X, Y, PC;
@@ -132,36 +144,77 @@ so_emul:
 
 	mov	r13b, r12b ; r13b = pole C.
 	shr	r12w, 8
-	
+
 	mov	r14b, r12b
 	and	r14b, 0x7 ; r14b = pole B.
 	shr	r12w, 3
-	
+
 	mov 	r15b, r12b ; r15b = pole A.
 
-	and	r10w, OP_MASK ; r10w = typ instrukcji i 14 zer.
+	and	r10w, OP_MASK ; r10w = pole TYP i 14 zer.
 
 	; ---- switch(operation_type)
 	cmp	r10w, FLAG_OP
 	je	.flag_op
 	cmp	r10w, JMP_OP
 	je	.jmp_op
-	
+
 	mov	r14b, [r11 + r14] ; r14b = argptr[core][arg1_code];
-	
+
 	cmp	r10w, UNARY_OP
 	je	.unary_op
 .binary_op:
 	mov	r15, [r11 + r15]
 	mov	r15b, [r15] ; r15b = *argptr[core][arg2_code];
 
+	cmp	r13b, SUB_OP
+	je	.sub
+	cmp	r13b, ADC_OP
+	je	.adc
+	cmp	r13b, SBB_OP
+	je	.sbb
+	cmp	r13b, XCHG_OP
+	je	.xchg
+	jmp	.common ; default common
+.sub:
 	jmp	.after
+.adc:
+	jmp	.after
+.sbb:
+	jmp	.after
+.xchg:
+	jmp	.after
+
 .unary_op:
 	; ---- swap(r13b, r15b) ----
 	mov	al, r13b
 	mov	r13b, r15b
 	mov	r15b, al
 	; --------------------------
+	cmp	r13b, CMPI_OP
+	je	.cmpi
+	cmp	r13b, RCRI_OP
+	je	.rcri
+.common:
+	; ---- switch(op_num) ------
+	cmp	r13b, OR_OP
+	je	.or
+	cmp	r13b, XOR_OP
+	je	.xor
+	cmp	r13b, ADD_OP
+	je	.add
+	; default .mov
+	; --------------------------
+.mov:
+
+.or:
+
+.xor:
+
+.add:
+
+.cmpi:
+.rcri:
 
 	jmp	.after
 .flag_op:
