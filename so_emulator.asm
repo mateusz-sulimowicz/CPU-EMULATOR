@@ -127,19 +127,29 @@ so_emul:
 	
 	and	r10w, OP_MASK
 	; switch(OPERATION_TYPE)
-	cmp	r10w, UNARY_OP
-	je	.unary_op
 	cmp	r10w, FLAG_OP
 	je	.flag_op
 	cmp	r10w, JMP_OP
 	je	.jmp_op
-.binary_op:
+
+	; r13b = op_num;
+	mov	r13b, r12b
+	shr	r12w, 8
 	
+	; r14b = argptr[core][arg1_code]
+	mov	r14b, r12b
+	and	r14b, 0x7
+	mov	r14b, [r11 + r14]
+	shr	r12w, 3
+	
+	; r15b = arg2_code
+	mov 	r15b, r12b
 
-
-	jmp	.after
-.unary_op:
-
+	; if (op_type == UNARY_OP) swap(r13, r15);
+	cmp	r10w, UNARY_OP
+	cmove	rax, r13
+	cmove	r13, r15
+	cmove	r15, rax
 
 	jmp	.after
 .flag_op:
