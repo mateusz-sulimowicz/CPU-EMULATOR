@@ -23,7 +23,7 @@ OP_MASK		equ 0xC000
 BINARY_OP	equ 0x0000
 UNARY_OP	equ 0x4000
 JMP_OP		equ 0x8000
-FLAG_OP		equ 0xC000
+CFLAG_OP	equ 0xC000
 
 MOV_OP		equ 0
 OR_OP		equ 2
@@ -154,13 +154,12 @@ so_emul:
 	and	r10w, OP_MASK ; r10w = pole TYP i 14 zer.
 
 	; ---- switch(operation_type)
-	cmp	r10w, FLAG_OP
-	je	.flag_op
+	cmp	r10w, CFLAG_OP
+	je	.cflag_op
 	cmp	r10w, JMP_OP
 	je	.jmp_op
 
-	mov	r14b, [r11 + r14] ; r14b = argptr[core][arg1_code];
-
+	mov	r14, [r11 + r14] ; r14b = argptr[core][arg1_code];
 	cmp	r10w, UNARY_OP
 	je	.unary_op
 .binary_op:
@@ -177,20 +176,21 @@ so_emul:
 	je	.xchg
 	jmp	.common ; default common
 .sub:
+	sub	[r14], r15b
+	jmp	.modify_zero_flag
+.adc: ;TODO
 	jmp	.after
-.adc:
+.sbb: ;TODO
 	jmp	.after
-.sbb:
+.xchg:; TODO
 	jmp	.after
-.xchg:
-	jmp	.after
-
 .unary_op:
 	; ---- swap(r13b, r15b) ----
-	mov	al, r13b
+	mov	r10b, r13b
 	mov	r13b, r15b
-	mov	r15b, al
+	mov	r15b, r10b
 	; --------------------------
+
 	cmp	r13b, CMPI_OP
 	je	.cmpi
 	cmp	r13b, RCRI_OP
@@ -206,18 +206,32 @@ so_emul:
 	; default .mov
 	; --------------------------
 .mov:
+	mov	[r14], r15b
 	jmp	.after
 .or:
-	jmp	.after
+	or	[r14], r15b
+	jmp	.modify_zero_flag
 .xor:
-	jmp	.after
+	xor	[r14], r15b
+	jmp	.modify_zero_flag
 .add:
-	jmp	.after
+	add	[r14], r15b
+	jmp	.modify_zero_flag
 .cmpi:
-	jmp	.after
+	xor	r13b, r13b
+	cmp	[r14], r15b
+	adc	r13b, 0
+	mov 	[r9 + C_FL], r13b
+	cmp	[r14], r15b
+	jmp	.modify_zero_flag
 .rcri:
+	mov	r13b, [r9 + C_FL]
+	shr	r13b, 1
+	rcr	byte [r14], 1
+	adc	r13b, 0
+	mov 	[r9 + C_FL], r13b
 	jmp	.after
-.flag_op:
+.cflag_op:
 	mov	[r9 + C_FL], r14b
 	jmp	.after
 .jmp_op:	
@@ -239,6 +253,13 @@ so_emul:
 	mul	r13b ; TODO bez mnozenia
 	add 	[r9 + PC_CT], al
 	jmp	.after
+.modify_zero_flag:
+	jnz	.clear_zero
+.set_zero:
+	mov	byte [r9 + Z_FL], 1
+	jmp	.after
+.clear_zero:
+	mov	byte [r9 + Z_FL], 0
 .after:
 	inc	byte [r9 + PC_CT]
 	dec	rdx
