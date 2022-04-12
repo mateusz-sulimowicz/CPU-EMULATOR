@@ -38,7 +38,7 @@ argptr times 8 * CORES dq 0
 
 section .rodata
 
-switch_op_type dq binary_op, unary_op, cflag_op, jmp_op
+switch_op_type dq before_binary_op, before_unary_op, cflag_op, jmp_op
 
 switch_binary_op dq mov_op, ignore, or_op, ignore, add_op, sub_op, adc_op, sbb_op, xchg_op
 
@@ -52,7 +52,12 @@ section .text
 ; rdx	- ilosc krokow do wykonania,
 ; r8	- identyfikator rdzenia z [0, CORES).
 so_emul:
-	enter	0, 0
+	push r10
+	push r11
+	push r12
+	push r13
+	push r14
+	push r15
 next:	
 	; *rdi = state[core];
 	lea	r9, [state + r8 * SIZEOF_STATE]
@@ -117,7 +122,6 @@ next:
 	add	al, r13b
 	lea	r12, [rcx + rax]
 	mov	[r11 + YD_REF], r12
-
 	; ---------------------------------------
 
 	xor	r10, r10
@@ -130,7 +134,6 @@ next:
 	; [ B - 3 bity   ]
 	; [ C - 8 bitow  ]
 	; ------------------------------
-
 	mov	r13b, [r9 + PC_CT]	; r13b = state[core].PC;
 	mov	r12w, [rcx + 2 * r13]	; r12w = code[r13b];
 
@@ -148,18 +151,94 @@ next:
 	and	r15b, 0x7
 	shr	r12w, 3			; r15b = pole A.
 					; r10 = pole TYP.
-
 	; ------------------------------
 	; ----- SWITCH(OP_TYPE) --------
 	; ------------------------------
 	cmp	r10, 4
 	ja	ignore
-	jmp	[switch_op_type + 8 * r10]
+	jmp	[rel switch_op_type + 8 * r10]
+before_binary_op:
+	mov	r14, [r11 + r14]	; r14b = argptr[core][arg1_code];
+	mov	r15, [r11 + r15]
+	mov	r15b, [r15] 		; r15b = *argptr[core][arg2_code];
 
+	; ------------------------------
+	; ----- SWITCH(BINARY_OP) ------
+	; ------------------------------
+	cmp	r13b, 8
+	ja	ignore
+	jmp	[rel switch_binary_op + 8 * r13]
+before_unary_op:
+	mov	r14, [r11 + r14] 	; r14b = argptr[core][arg1_code];
+
+	; ---- swap(r13b, r15b) ----
+	mov	r10b, r13b
+	mov	r13b, r15b
+	mov	r15b, r10b
+
+	; ------------------------------
+	; ----- SWITCH(UNARY_OP) -------
+	; ------------------------------
+	cmp	r13b, 7
+	ja	ignore
+	jmp	[rel switch_unary_op + 8 * r13]
+after:
+ignore:
+	inc	byte [r9 + PC_CT]
+	dec	rdx
+	jmp	next	
+done:
+	pop r15
+	pop r14
+	pop r13
+	pop r12
+	pop r11
+	pop r10
+	ret
+
+; --------------------------------------
+; -------- POMOCNICZE ------------------
+; --------------------------------------
+mov_op:
+	mov	[r14], r15b
+	jmp	after
+or_op:
+	or	[r14], r15b
+	jmp	set_zero_flag
+xor_op:
+	xor	[r14], r15b
+	jmp	set_zero_flag
+add_op:
+	add	[r14], r15b
+	jmp	set_zero_flag
+sub_op:
+	sub	[r14], r15b
+	jmp	set_zero_flag
+adc_op:
+	mov	al, [r9 + C_FL]
+	shr	al, 1
+	adc	[r14], r15b
+	jmp	set_flags
+sbb_op:
+	mov	al, [r9 + C_FL]
+	shr	al, 1
+	sbb	[r14], r15b
+	jmp	set_flags
+xchg_op: ;TODO
+
+
+cmpi_op:
+	cmp	[r14], r15b
+	jmp	set_flags
+rcr_op:
+	mov	al, [r9 + C_FL]
+	shr	al, 1
+	rcr	byte [r14], 1
+	call	set_carry_flag
+	jmp	after
 cflag_op:
 	mov	[r9 + C_FL], r14b
 	jmp	after
-
 jmp_op:	
 	mov	al, 1
 	add	al, r14b
@@ -178,83 +257,19 @@ jmp_op:
 	mul	r13b
 	add 	[r9 + PC_CT], al
 	jmp	after
-
-binary_op:
-	mov	r14, [r11 + r14]	; r14b = argptr[core][arg1_code];
-	mov	r15, [r11 + r15]
-	mov	r15b, [r15] 		; r15b = *argptr[core][arg2_code];
-
-	; ------------------------------
-	; ----- SWITCH(BINARY_OP) ------
-	; ------------------------------
-	cmp	r13b, 8
-	ja	ignore
-	jmp	[switch_binary_op + 8 * r13]
-unary_op:
-	mov	r14, [r11 + r14] 	; r14b = argptr[core][arg1_code];
-
-	; ---- swap(r13b, r15b) ----
-	mov	r10b, r13b
-	mov	r13b, r15b
-	mov	r15b, r10b
-
-	; ------------------------------
-	; ----- SWITCH(UNARY_OP) -------
-	; ------------------------------
-	cmp	r13b, 7
-	ja	ignore
-	jmp	[switch_unary_op + 8 * r13] ; TODO rel
-mov_op:
-	mov	[r14], r15b
-	jmp	after
-or_op:
-	or	[r14], r15b
-	jmp	modify_zero_flag
-xor_op:
-	xor	[r14], r15b
-	jmp	modify_zero_flag
-add_op:
-	add	[r14], r15b
-	jmp	modify_zero_flag
-sub_op:
-	sub	[r14], r15b
-	jmp	modify_zero_flag
-adc_op: ;TODO
-
-
-sbb_op: ;TODO
-
-
-xchg_op: ;TODO
-
-
-cmpi_op:
-	xor	r13b, r13b
-	cmp	[r14], r15b
-	adc	r13b, 0
-	mov 	[r9 + C_FL], r13b
-	cmp	[r14], r15b
-	jmp	modify_zero_flag
-rcr_op:
-	mov	r13b, [r9 + C_FL]
-	shr	r13b, 1
-	rcr	byte [r14], 1
-	adc	r13b, 0
-	mov 	[r9 + C_FL], r13b
-	jmp	after
-
-modify_zero_flag:
-	jnz	clear_zero
+set_flags:
+	call	 set_carry_flag
+set_zero_flag:
+	jnz	clear_zero_flag
 	mov	byte [r9 + Z_FL], 1
 	jmp	after
-clear_zero:
+clear_zero_flag:
 	mov	byte [r9 + Z_FL], 0
-after:
-ignore:
-	inc	byte [r9 + PC_CT]
-	dec	rdx
-	jmp	next	
-done:
-	leave
+	jmp	after
+set_carry_flag:
+	jnc	clear_carry_flag
+	mov	byte [r9 + C_FL], 1
 	ret
-
+clear_carry_flag:
+	mov	byte [r9 + C_FL], 0
+	ret
