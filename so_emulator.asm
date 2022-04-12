@@ -19,24 +19,6 @@ YD_REF		equ 7
 
 BREAK_OP	equ 0xffff
 
-OP_MASK		equ 0xC000
-BINARY_OP	equ 0x0000
-UNARY_OP	equ 0x4000
-JMP_OP		equ 0x8000
-CFLAG_OP	equ 0xC000
-
-MOV_OP		equ 0
-OR_OP		equ 2
-XOR_OP		equ 3
-ADD_OP		equ 4
-SUB_OP		equ 5
-ADC_OP		equ 6
-SBB_OP		equ 7
-XCHG_OP		equ 8
-
-CMPI_OP		equ 5
-RCRI_OP		equ 6
-
 ; To jest stan procesora SO.
 ; struct __attribute__((packed)) so_state_t {
 ; uint8_t A, D, X, Y, PC;
@@ -54,6 +36,14 @@ state times CORES * SIZEOF_STATE db 0
 ; wskazniki na mozliwe argumenty operacji.
 argptr times 8 * CORES dq 0
 
+section .rodata
+
+switch_op_type dq binary_op, unary_op, cflag_op, jmp_op
+
+switch_binary_op dq mov_op, ignore, or_op, ignore, add_op, sub_op, adc_op, sbb_op, xchg_op
+
+switch_unary_op dq mov_op, ignore, ignore, xor_op, add_op, cmpi_op, rcr_op
+
 section .text
 
 ; rdi 	- wskaznik na output,
@@ -63,18 +53,19 @@ section .text
 ; r8	- identyfikator rdzenia z [0, CORES).
 so_emul:
 	enter	0, 0
-
-.next:	
+next:	
 	; *rdi = state[core];
 	lea	r9, [state + r8 * SIZEOF_STATE]
 	mov	r10, [r9]
 	mov 	[rdi], r10	
 
 	test	rdx, rdx
-	jz	.done
+	jz	done
 
+	; ---------------------------------------
 	; --- Tworzymy tablice wskaznikow -------
-	; --- na potencjalne argumenty operacji.
+	; --- na mozliwe argumenty operacji. ----
+	; ---------------------------------------
 
 	xor	r13, r13
 	xor	r14, r14
@@ -132,111 +123,45 @@ so_emul:
 	xor	r10, r10
 	xor	r12, r12
 
+	; ------------------------------
 	; Kazda instrukcja jest postaci:
-	; [ TYP - 2 bity ][ A - 3 bity ][ B - 3 bity ][ C - 8 bitow ]
+	; [ TYP - 2 bity ]
+	; [ A - 3 bity 	 ]
+	; [ B - 3 bity   ]
+	; [ C - 8 bitow  ]
+	; ------------------------------
 
-	mov	r13b, [r9 + PC_CT] ; r13b = state[core].PC;
-	mov	r10w, [rcx + 2 * r13] ; r10w = code[r13b];
-	mov	r12w, r10w ; r12w = tresc instrukcji.
+	mov	r13b, [r9 + PC_CT]	; r13b = state[core].PC;
+	mov	r12w, [rcx + 2 * r13]	; r12w = code[r13b];
 
-	cmp	r10w, BREAK_OP ; Instrukcja BRK konczy wykonanie programu.
-	je	.done
+	cmp	r12w, BREAK_OP 		; Instrukcja BRK konczy wykonanie programu.
+	je	done
 
-	mov	r13b, r12b ; r13b = pole C.
+	mov	r13b, r12b 	      	; r13b = pole C.
 	shr	r12w, 8
 
 	mov	r14b, r12b
-	and	r14b, 0x7 ; r14b = pole B.
+	and	r14b, 0x7 	      	; r14b = pole B.
 	shr	r12w, 3
 
-	mov 	r15b, r12b ; r15b = pole A.
+	mov 	r15b, r12b
+	and	r15b, 0x7
+	shr	r12w, 3			; r15b = pole A.
+					; r10 = pole TYP.
 
-	and	r10w, OP_MASK ; r10w = pole TYP i 14 zer.
+	; ------------------------------
+	; ----- SWITCH(OP_TYPE) --------
+	; ------------------------------
+	cmp	r10, 4
+	ja	ignore
+	jmp	[switch_op_type + 8 * r10]
 
-	; ---- switch(operation_type)
-	cmp	r10w, CFLAG_OP
-	je	.cflag_op
-	cmp	r10w, JMP_OP
-	je	.jmp_op
-
-	mov	r14, [r11 + r14] ; r14b = argptr[core][arg1_code];
-	cmp	r10w, UNARY_OP
-	je	.unary_op
-.binary_op:
-	mov	r15, [r11 + r15]
-	mov	r15b, [r15] ; r15b = *argptr[core][arg2_code];
-
-	cmp	r13b, SUB_OP
-	je	.sub
-	cmp	r13b, ADC_OP
-	je	.adc
-	cmp	r13b, SBB_OP
-	je	.sbb
-	cmp	r13b, XCHG_OP
-	je	.xchg
-	jmp	.common ; default common
-.sub:
-	sub	[r14], r15b
-	jmp	.modify_zero_flag
-.adc: ;TODO
-	jmp	.after
-.sbb: ;TODO
-	jmp	.after
-.xchg:; TODO
-	jmp	.after
-.unary_op:
-	; ---- swap(r13b, r15b) ----
-	mov	r10b, r13b
-	mov	r13b, r15b
-	mov	r15b, r10b
-	; --------------------------
-
-	cmp	r13b, CMPI_OP
-	je	.cmpi
-	cmp	r13b, RCRI_OP
-	je	.rcri
-.common:
-	; ---- switch(op_num) ------
-	cmp	r13b, OR_OP
-	je	.or
-	cmp	r13b, XOR_OP
-	je	.xor
-	cmp	r13b, ADD_OP
-	je	.add
-	; default .mov
-	; --------------------------
-.mov:
-	mov	[r14], r15b
-	jmp	.after
-.or:
-	or	[r14], r15b
-	jmp	.modify_zero_flag
-.xor:
-	xor	[r14], r15b
-	jmp	.modify_zero_flag
-.add:
-	add	[r14], r15b
-	jmp	.modify_zero_flag
-.cmpi:
-	xor	r13b, r13b
-	cmp	[r14], r15b
-	adc	r13b, 0
-	mov 	[r9 + C_FL], r13b
-	cmp	[r14], r15b
-	jmp	.modify_zero_flag
-.rcri:
-	mov	r13b, [r9 + C_FL]
-	shr	r13b, 1
-	rcr	byte [r14], 1
-	adc	r13b, 0
-	mov 	[r9 + C_FL], r13b
-	jmp	.after
-.cflag_op:
+cflag_op:
 	mov	[r9 + C_FL], r14b
-	jmp	.after
-.jmp_op:	
+	jmp	after
+
+jmp_op:	
 	mov	al, 1
-	; TODO petla?
 	add	al, r14b
 	shr	r14b, 1
 
@@ -250,20 +175,86 @@ so_emul:
 	add 	al, r14b
 
 	and	al, 1	
-	mul	r13b ; TODO bez mnozenia
+	mul	r13b
 	add 	[r9 + PC_CT], al
-	jmp	.after
-.modify_zero_flag:
-	jnz	.clear_zero
-.set_zero:
+	jmp	after
+
+binary_op:
+	mov	r14, [r11 + r14]	; r14b = argptr[core][arg1_code];
+	mov	r15, [r11 + r15]
+	mov	r15b, [r15] 		; r15b = *argptr[core][arg2_code];
+
+	; ------------------------------
+	; ----- SWITCH(BINARY_OP) ------
+	; ------------------------------
+	cmp	r13b, 8
+	ja	ignore
+	jmp	[switch_binary_op + 8 * r13]
+unary_op:
+	mov	r14, [r11 + r14] 	; r14b = argptr[core][arg1_code];
+
+	; ---- swap(r13b, r15b) ----
+	mov	r10b, r13b
+	mov	r13b, r15b
+	mov	r15b, r10b
+
+	; ------------------------------
+	; ----- SWITCH(UNARY_OP) -------
+	; ------------------------------
+	cmp	r13b, 7
+	ja	ignore
+	jmp	[switch_unary_op + 8 * r13] ; TODO rel
+mov_op:
+	mov	[r14], r15b
+	jmp	after
+or_op:
+	or	[r14], r15b
+	jmp	modify_zero_flag
+xor_op:
+	xor	[r14], r15b
+	jmp	modify_zero_flag
+add_op:
+	add	[r14], r15b
+	jmp	modify_zero_flag
+sub_op:
+	sub	[r14], r15b
+	jmp	modify_zero_flag
+adc_op: ;TODO
+
+
+sbb_op: ;TODO
+
+
+xchg_op: ;TODO
+
+
+cmpi_op:
+	xor	r13b, r13b
+	cmp	[r14], r15b
+	adc	r13b, 0
+	mov 	[r9 + C_FL], r13b
+	cmp	[r14], r15b
+	jmp	modify_zero_flag
+rcr_op:
+	mov	r13b, [r9 + C_FL]
+	shr	r13b, 1
+	rcr	byte [r14], 1
+	adc	r13b, 0
+	mov 	[r9 + C_FL], r13b
+	jmp	after
+
+modify_zero_flag:
+	jnz	clear_zero
 	mov	byte [r9 + Z_FL], 1
-	jmp	.after
-.clear_zero:
+	jmp	after
+clear_zero:
 	mov	byte [r9 + Z_FL], 0
-.after:
+after:
+ignore:
 	inc	byte [r9 + PC_CT]
 	dec	rdx
-	jmp	.next	
-.done:
+	jmp	next	
+done:
 	leave
 	ret
+
