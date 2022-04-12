@@ -36,15 +36,32 @@ state times CORES * SIZEOF_STATE db 0
 ; wskazniki na mozliwe argumenty operacji.
 argptr times 8 * CORES dq 0
 
-section .rodata
-
-switch_op_type dq before_binary_op, before_unary_op, cflag_op, jmp_op
-
-switch_binary_op dq mov_op, ignore, or_op, ignore, add_op, sub_op, adc_op, sbb_op, xchg_op
-
-switch_unary_op dq mov_op, ignore, ignore, xor_op, add_op, cmpi_op, rcr_op
-
 section .text
+
+op_type: 
+dq before_binary_op - op_type 
+dq before_unary_op - op_type
+dq cflag_op - op_type
+dq jmp_op - op_type
+
+binary_op:
+dq mov_op - binary_op
+dq ignore - binary_op
+dq or_op - binary_op
+dq ignore - binary_op
+dq add_op - binary_op
+dq sub_op - binary_op
+dq adc_op - binary_op
+dq sbb_op - binary_op
+
+unary_op:
+dq mov_op - unary_op
+dq ignore - unary_op
+dq ignore - unary_op
+dq xor_op - unary_op
+dq add_op - unary_op
+dq cmpi_op - unary_op
+dq rcr_op - unary_op
 
 ; rdi 	- wskaznik na output,
 ; rsi	- wskaznik na pamiec programu,
@@ -59,8 +76,9 @@ so_emul:
 	push r14
 	push r15
 next:	
-	; *rdi = state[core];
-	lea	r9, [state + r8 * SIZEOF_STATE]
+
+	lea	r9, [rel state] 	; *rdi = state[core];
+	lea	r9, [r9 + r8 * SIZEOF_STATE]
 	mov	r10, [r9]
 	mov 	[rdi], r10	
 
@@ -79,7 +97,8 @@ next:
 	; r11 = &argptr[core];
 	mov 	rax, r8
 	shl	rax, 6
-	lea	r11, [argptr + rax]
+	lea	r11, [rel argptr]
+	lea	r11, [r11 + rax]
 
 	; argptr[core][A_REG] = &(state[core].A);
 	lea	r12, [r9 + A_REG]
@@ -150,38 +169,45 @@ next:
 	mov 	r15b, r12b
 	and	r15b, 0x7
 	shr	r12w, 3			; r15b = pole A.
-					; r10 = pole TYP.
 	; ------------------------------
 	; ----- SWITCH(OP_TYPE) --------
 	; ------------------------------
-	cmp	r10, 4
-	ja	ignore
-	jmp	[rel switch_op_type + 8 * r10]
+	cmp	r12, 3
+	ja	ignore	
+	lea  	rax, [rel op_type]
+	add	rax, [rax + 8 * r12]
+	jmp	rax
 before_binary_op:
-	mov	r14, [r11 + r14]	; r14b = argptr[core][arg1_code];
-	mov	r15, [r11 + r15]
-	mov	r15b, [r15] 		; r15b = *argptr[core][arg2_code];
+	mov	r14, [r11 + r14]	; r14 = argptr[core][arg1_code];
+	mov	r15, [r11 + r15]	; r15 = argptr[core][arg2_code];
 
+	cmp	r13b, 8
+	je	xchg_op
+
+	mov	r15b, [r15] 		; r15b = *argptr[core][arg2_code];
 	; ------------------------------
 	; ----- SWITCH(BINARY_OP) ------
 	; ------------------------------
-	cmp	r13b, 8
+	cmp	r13b, 7
 	ja	ignore
-	jmp	[rel switch_binary_op + 8 * r13]
+	lea	rax, [rel binary_op]
+	add	rax, [rax + 8 * r13]
+	jmp	rax
 before_unary_op:
-	mov	r14, [r11 + r14] 	; r14b = argptr[core][arg1_code];
+	mov	r14, [r11 + r14] 	; r14 = argptr[core][arg1_code];
 
-	; ---- swap(r13b, r15b) ----
+	; swap(r13b, r15b)
 	mov	r10b, r13b
 	mov	r13b, r15b
 	mov	r15b, r10b
-
 	; ------------------------------
 	; ----- SWITCH(UNARY_OP) -------
 	; ------------------------------
 	cmp	r13b, 7
 	ja	ignore
-	jmp	[rel switch_unary_op + 8 * r13]
+	lea	rax, [rel unary_op]
+	add	rax, [rax + 8 * r13]
+	jmp	rax
 after:
 ignore:
 	inc	byte [r9 + PC_CT]
@@ -224,9 +250,11 @@ sbb_op:
 	shr	al, 1
 	sbb	[r14], r15b
 	jmp	set_flags
-xchg_op: ;TODO
-
-
+xchg_op:
+	mov	al, [r15]
+   lock xchg	[r14], al
+	mov	[r15], al
+	jmp	after
 cmpi_op:
 	cmp	[r14], r15b
 	jmp	set_flags
