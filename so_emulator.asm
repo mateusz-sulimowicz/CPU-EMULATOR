@@ -78,8 +78,7 @@ so_emul:
 
 next:	
 	lea	r9, [rel cpu_state] 	; *rdi = state[core];
-	lea	r9, [r9 + rcx * SIZEOF_STATE]
-	mov	r8, [r9]		; r8 = aktualny stan rdzenia.	
+	lea	r9, [r9 + rcx * SIZEOF_STATE]	
 
 	test	rdx, rdx
 	jz	done
@@ -157,6 +156,9 @@ next:
 	; ------------------------------
 	mov	r13b, [r9 + PC_CT]	; r13b = state[core].PC;
 	mov	r12w, [rdi + 2 * r13]	; r12w = code[r13b];
+kurwa:
+	inc	byte [r9 + PC_CT]
+	dec	rdx
 
 	cmp	r12w, BREAK_OP 		; Instrukcja BRK konczy wykonanie programu.
 	je	done
@@ -212,8 +214,6 @@ before_unary_op:
 	jmp	rax
 after:
 ignore:
-	inc	byte [r9 + PC_CT]
-	dec	rdx
 	jmp	next	
 done:
 	pop	r15
@@ -223,7 +223,7 @@ done:
 	pop	r11
 	pop	r10
 
-	mov	rax, r8
+	mov	rax, [r9]
 	leave
 	ret
 
@@ -285,9 +285,9 @@ jmp_op:
 	and	r15b, r14b
 	add 	al, r15b
 
-	shr	al, 1	
-	jnc	after
-	add 	[r9 + PC_CT], al
+	and	al, 1	
+	jz	after
+	add 	[r9 + PC_CT], r13b
 	jmp	after
 
 set_flags:
