@@ -156,7 +156,7 @@ next:
 	; ------------------------------
 	mov	r13b, [r9 + PC_CT]	; r13b = state[core].PC;
 	mov	r12w, [rdi + 2 * r13]	; r12w = code[r13b];
-kurwa:
+
 	inc	byte [r9 + PC_CT]
 	dec	rdx
 
