@@ -31,7 +31,7 @@ SIZEOF_STATE 	equ 8
 section .data
 
 ; Dla kazdego rdzenia jego stan.
-state times CORES * SIZEOF_STATE db 0
+cpu_state times CORES * SIZEOF_STATE db 0
 ; Dla kazdego rdzenia 
 ; wskazniki na mozliwe argumenty operacji.
 argptr times 8 * CORES dq 0
@@ -62,25 +62,24 @@ dq xor_op - unary_op
 dq add_op - unary_op
 dq cmpi_op - unary_op
 dq rcr_op - unary_op
-
-; rdi 	- wskaznik na output,
-; rsi	- wskaznik na pamiec programu,
-; rcx	- wskaznik na pamiec danych,
+ 	
+; rdi	- wskaznik na pamiec programu,
+; rsi	- wskaznik na pamiec danych,
 ; rdx	- ilosc krokow do wykonania,
-; r8	- identyfikator rdzenia z [0, CORES).
+; rcx	- identyfikator rdzenia z [1, CORES).
 so_emul:
-	push r10
-	push r11
-	push r12
-	push r13
-	push r14
-	push r15
-next:	
+	enter 	0, 0
+	push	r10
+	push	r11
+	push	r12
+	push	r13
+	push	r14
+	push	r15
 
-	lea	r9, [rel state] 	; *rdi = state[core];
-	lea	r9, [r9 + r8 * SIZEOF_STATE]
-	mov	r10, [r9]
-	mov 	[rdi], r10	
+next:	
+	lea	r9, [rel cpu_state] 	; *rdi = state[core];
+	lea	r9, [r9 + rcx * SIZEOF_STATE]
+	mov	r8, [r9]		; r8 = aktualny stan rdzenia.	
 
 	test	rdx, rdx
 	jz	done
@@ -95,56 +94,59 @@ next:
 	xor	r15, r15
 
 	; r11 = &argptr[core];
-	mov 	rax, r8
+	mov 	rax, rcx
 	shl	rax, 6
 	lea	r11, [rel argptr]
 	lea	r11, [r11 + rax]
 
 	; argptr[core][A_REG] = &(state[core].A);
 	lea	r12, [r9 + A_REG]
-	mov	[r11 + A_REG], r12
+	mov	[r11 + 8 * A_REG], r12
 
 	; argptr[core][D_REG] = &(state[core].D);
 	lea	r12, [r9 + D_REG]
-	mov 	[r11 + D_REG], r12
+	mov 	[r11 + 8 * D_REG], r12
 	; r13b = state[core].D;
 	mov	r13b, [r12]
 
 	; argptr[core][X_REG] = &(state[core].X);
 	lea	r12, [r9 + X_REG]
-	mov	[r11 + X_REG], r12
+	mov	[r11 + 8 * X_REG], r12
 	; r14b = state[core].X
 	mov 	r14b, [r12]
 
 	; argptr[core][Y_REG] = &(state[core].Y);
 	lea	r12, [r9 + Y_REG]
-	mov	[r11 + Y_REG], r12
+	mov	[r11 + 8 * Y_REG], r12
 	; r15b = state[core].Y;
 	mov	r15b, [r12]
 
 	; argptr[core][X_REF] = data + state[core].X;
-	lea	r12, [rcx + r14]
-	mov	[r11 + X_REF], r12
+	lea	r12, [rsi + r14]
+	mov	[r11 + 8 * X_REF], r12
 
 	; argptr[core][Y_REF] = data + state[core].Y;
-	lea	r12, [rcx + r15]
-	mov	[r11 + Y_REF], r12
+	lea	r12, [rsi + r15]
+	mov	[r11 + 8 * Y_REF], r12
 	
 	; argptr[core][XD_REF] = data + state[core].X + state[core].D;
 	mov	al, r14b
 	add	al, r13b
-	lea	r12, [rcx + rax]
-	mov	[r11 + XD_REF], r12
+	lea	r12, [rsi + rax]
+	mov	[r11 + 8 * XD_REF], r12
 
 	; argptr[core][YD_REF] = data + state[core].Y + state[core].D;
 	mov	al, r15b
 	add	al, r13b
-	lea	r12, [rcx + rax]
-	mov	[r11 + YD_REF], r12
+	lea	r12, [rsi + rax]
+	mov	[r11 + 8 * YD_REF], r12
 	; ---------------------------------------
 
 	xor	r10, r10
 	xor	r12, r12
+	xor	r13, r13
+	xor	r14, r14
+	xor	r15, r15
 
 	; ------------------------------
 	; Kazda instrukcja jest postaci:
@@ -154,7 +156,7 @@ next:
 	; [ C - 8 bitow  ]
 	; ------------------------------
 	mov	r13b, [r9 + PC_CT]	; r13b = state[core].PC;
-	mov	r12w, [rcx + 2 * r13]	; r12w = code[r13b];
+	mov	r12w, [rdi + 2 * r13]	; r12w = code[r13b];
 
 	cmp	r12w, BREAK_OP 		; Instrukcja BRK konczy wykonanie programu.
 	je	done
@@ -178,8 +180,8 @@ next:
 	add	rax, [rax + 8 * r12]
 	jmp	rax
 before_binary_op:
-	mov	r14, [r11 + r14]	; r14 = argptr[core][arg1_code];
-	mov	r15, [r11 + r15]	; r15 = argptr[core][arg2_code];
+	mov	r14, [r11 + 8 * r14]	; r14 = argptr[core][arg1_code];
+	mov	r15, [r11 + 8 * r15]	; r15 = argptr[core][arg2_code];
 
 	cmp	r13b, 8
 	je	xchg_op
@@ -194,7 +196,7 @@ before_binary_op:
 	add	rax, [rax + 8 * r13]
 	jmp	rax
 before_unary_op:
-	mov	r14, [r11 + r14] 	; r14 = argptr[core][arg1_code];
+	mov	r14, [r11 + 8 * r14] 	; r14 = argptr[core][arg1_code];
 
 	; swap(r13b, r15b)
 	mov	r10b, r13b
@@ -214,12 +216,15 @@ ignore:
 	dec	rdx
 	jmp	next	
 done:
-	pop r15
-	pop r14
-	pop r13
-	pop r12
-	pop r11
-	pop r10
+	pop	r15
+	pop	r14
+	pop	r13
+	pop	r12
+	pop	r11
+	pop	r10
+
+	mov	rax, r8
+	leave
 	ret
 
 ; --------------------------------------
@@ -262,8 +267,7 @@ rcr_op:
 	mov	al, [r9 + C_FL]
 	shr	al, 1
 	rcr	byte [r14], 1
-	call	set_carry_flag
-	jmp	after
+	jmp	set_carry_flag
 cflag_op:
 	mov	[r9 + C_FL], r14b
 	jmp	after
@@ -279,14 +283,19 @@ jmp_op:
 
 	mov	r15b, [r9 + Z_FL]
 	and	r15b, r14b
-	add 	al, r14b
+	add 	al, r15b
 
-	and	al, 1	
-	mul	r13b
+	shr	al, 1	
+	jnc	after
 	add 	[r9 + PC_CT], al
 	jmp	after
+
 set_flags:
-	call	 set_carry_flag
+	jnc	clear_carry
+	mov	byte [r9 + C_FL], 1
+	jmp 	set_zero_flag
+clear_carry:
+	mov	byte [r9 + C_FL], 0
 set_zero_flag:
 	jnz	clear_zero_flag
 	mov	byte [r9 + Z_FL], 1
@@ -294,10 +303,11 @@ set_zero_flag:
 clear_zero_flag:
 	mov	byte [r9 + Z_FL], 0
 	jmp	after
+
 set_carry_flag:
 	jnc	clear_carry_flag
 	mov	byte [r9 + C_FL], 1
-	ret
+	jmp	after
 clear_carry_flag:
 	mov	byte [r9 + C_FL], 0
-	ret
+	jmp	after
