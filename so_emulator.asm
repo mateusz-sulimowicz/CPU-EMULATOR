@@ -31,29 +31,29 @@ cpu_state times CORES * SIZEOF_STATE db 0
 section .rodata
 
 op_type: 
-dq before_binary_op - op_type 
-dq before_unary_op - op_type
-dq cflag_op - op_type
-dq jmp_op - op_type
+dw before_binary_op - op_type 
+dw before_unary_op - op_type
+dw cflag_op - op_type
+dw jmp_op - op_type
 
 binary_op:
-dq mov_op - binary_op
-dq ignore - binary_op
-dq or_op - binary_op
-dq ignore - binary_op
-dq add_op - binary_op
-dq sub_op - binary_op
-dq adc_op - binary_op
-dq sbb_op - binary_op
+dw mov_op - binary_op
+dw ignore - binary_op
+dw or_op - binary_op
+dw ignore - binary_op
+dw add_op - binary_op
+dw sub_op - binary_op
+dw adc_op - binary_op
+dw sbb_op - binary_op
 
 unary_op:
-dq mov_op - unary_op
-dq ignore - unary_op
-dq ignore - unary_op
-dq xor_op - unary_op
-dq add_op - unary_op
-dq cmpi_op - unary_op
-dq rcr_op - unary_op
+dw mov_op - unary_op
+dw ignore - unary_op
+dw ignore - unary_op
+dw xor_op - unary_op
+dw add_op - unary_op
+dw cmpi_op - unary_op
+dw rcr_op - unary_op
 
 section .text
 
@@ -121,11 +121,13 @@ next:
 	mov 	r15b, r12b
 	and	r15b, 0x7
 	shr	r12w, 3			; r15b = pole A.
+kurwa:
 	; ------------------------------
 	; ----- SWITCH(OP_TYPE) --------
 	; ------------------------------
 	lea  	rax, [rel op_type]
-	add	rax, [rax + 8 * r12]
+	movsx	r11, word [rax + 2 * r12]
+	add	rax, r11
 	jmp	rax
 before_binary_op:
 	mov	r11, r14
@@ -144,7 +146,8 @@ before_binary_op:
 	; ----- SWITCH(BINARY_OP) ------
 	; ------------------------------
 	lea	rax, [rel binary_op]
-	add	rax, [rax + 8 * r13]
+	movsx	r11, word [rax + 2 * r13]
+	add	rax, r11
 	jmp	rax
 before_unary_op:
 	mov	r11, r14
@@ -156,7 +159,8 @@ before_unary_op:
 	; ----- SWITCH(UNARY_OP) -------
 	; ------------------------------
 	lea	rax, [rel unary_op]
-	add	rax, [rax + 8 * r13]
+	movsx	r11, word [rax + 2 * r13]
+	add	rax, r11
 	jmp	rax
 after:
 ignore:
