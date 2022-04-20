@@ -121,7 +121,6 @@ next:
 	mov 	r15b, r12b
 	and	r15b, 0x7
 	shr	r12w, 3			; r15b = pole A.
-kurwa:
 	; ------------------------------
 	; ----- SWITCH(OP_TYPE) --------
 	; ------------------------------
@@ -213,7 +212,8 @@ rcr_op:
 	mov	al, [r9 + C_FL]
 	shr	al, 1
 	rcr	byte [r14], 1
-	jmp	set_carry_flag
+	call	set_carry_flag
+	jmp	after
 cflag_op:
 	mov	[r9 + C_FL], r14b
 	jmp	after
@@ -237,11 +237,7 @@ jmp_op:
 	jmp	after
 
 set_flags:
-	jnc	clear_carry
-	mov	byte [r9 + C_FL], 1
-	jmp 	set_zero_flag
-clear_carry:
-	mov	byte [r9 + C_FL], 0
+	call	set_carry_flag
 set_zero_flag:
 	jnz	clear_zero_flag
 	mov	byte [r9 + Z_FL], 1
@@ -253,7 +249,7 @@ clear_zero_flag:
 set_carry_flag:
 	jnc	clear_carry_flag
 	mov	byte [r9 + C_FL], 1
-	jmp	after
+	ret
 clear_carry_flag:
 	mov	byte [r9 + C_FL], 0
-	jmp	after
+	ret
