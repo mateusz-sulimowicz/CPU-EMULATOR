@@ -68,9 +68,6 @@ dq rcr_op - unary_op
 ; rdx	- ilosc krokow do wykonania,
 ; rcx	- identyfikator rdzenia z [1, CORES).
 so_emul:
-	enter 	0, 0
-	push	r10
-	push	r11
 	push	r12
 	push	r13
 	push	r14
@@ -176,8 +173,6 @@ next:
 	; ------------------------------
 	; ----- SWITCH(OP_TYPE) --------
 	; ------------------------------
-	cmp	r12, 3
-	ja	ignore	
 	lea  	rax, [rel op_type]
 	add	rax, [rax + 8 * r12]
 	jmp	rax
@@ -192,8 +187,6 @@ before_binary_op:
 	; ------------------------------
 	; ----- SWITCH(BINARY_OP) ------
 	; ------------------------------
-	cmp	r13b, 7
-	ja	ignore
 	lea	rax, [rel binary_op]
 	add	rax, [rax + 8 * r13]
 	jmp	rax
@@ -201,14 +194,10 @@ before_unary_op:
 	mov	r14, [r11 + 8 * r14] 	; r14 = argptr[core][arg1_code];
 
 	; swap(r13b, r15b)
-	mov	r10b, r13b
-	mov	r13b, r15b
-	mov	r15b, r10b
+	xchg	r13b, r15b
 	; ------------------------------
 	; ----- SWITCH(UNARY_OP) -------
 	; ------------------------------
-	cmp	r13b, 7
-	ja	ignore
 	lea	rax, [rel unary_op]
 	add	rax, [rax + 8 * r13]
 	jmp	rax
@@ -220,11 +209,7 @@ done:
 	pop	r14
 	pop	r13
 	pop	r12
-	pop	r11
-	pop	r10
-
 	mov	rax, [r9]
-	leave
 	ret
 
 ; --------------------------------------
