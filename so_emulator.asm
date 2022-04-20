@@ -12,11 +12,6 @@ PC_CT		equ 4
 C_FL		equ 6
 Z_FL		equ 7
 
-X_REF		equ 4
-Y_REF		equ 5
-XD_REF		equ 6
-YD_REF		equ 7
-
 BREAK_OP	equ 0xffff
 
 ; To jest stan procesora SO.
@@ -32,11 +27,8 @@ section .data
 
 ; Dla kazdego rdzenia jego stan.
 cpu_state times CORES * SIZEOF_STATE db 0
-; Dla kazdego rdzenia 
-; wskazniki na mozliwe argumenty operacji.
-argptr times 8 * CORES dq 0
 
-section .text
+section .rodata
 
 op_type: 
 dq before_binary_op - op_type 
@@ -62,7 +54,25 @@ dq xor_op - unary_op
 dq add_op - unary_op
 dq cmpi_op - unary_op
 dq rcr_op - unary_op
- 	
+
+section .text
+
+load_ptr:
+	cmp	r11, 3
+	ja	.load_dataptr
+	lea	rax, [r9 + r11]
+	ret
+.load_dataptr:
+	xor	rax, rax
+	cmp	r11, 6
+	jb	.load_xy
+	mov	al, [r9 + D_REG]
+	sub	r11, 2
+.load_xy:
+	add	al, [r9 + r11 - 2]
+	add	rax, rsi
+	ret
+	
 ; rdi	- wskaznik na pamiec programu,
 ; rsi	- wskaznik na pamiec danych,
 ; rdx	- ilosc krokow do wykonania,
@@ -80,65 +90,6 @@ next:
 	test	rdx, rdx
 	jz	done
 
-	; ---------------------------------------
-	; --- Tworzymy tablice wskaznikow -------
-	; --- na mozliwe argumenty operacji. ----
-	; ---------------------------------------
-
-	xor	r13, r13
-	xor	r14, r14
-	xor	r15, r15
-
-	; r11 = &argptr[core];
-	mov 	rax, rcx
-	shl	rax, 6
-	lea	r11, [rel argptr]
-	lea	r11, [r11 + rax]
-
-	; argptr[core][A_REG] = &(state[core].A);
-	lea	r12, [r9 + A_REG]
-	mov	[r11 + 8 * A_REG], r12
-
-	; argptr[core][D_REG] = &(state[core].D);
-	lea	r12, [r9 + D_REG]
-	mov 	[r11 + 8 * D_REG], r12
-	; r13b = state[core].D;
-	mov	r13b, [r12]
-
-	; argptr[core][X_REG] = &(state[core].X);
-	lea	r12, [r9 + X_REG]
-	mov	[r11 + 8 * X_REG], r12
-	; r14b = state[core].X
-	mov 	r14b, [r12]
-
-	; argptr[core][Y_REG] = &(state[core].Y);
-	lea	r12, [r9 + Y_REG]
-	mov	[r11 + 8 * Y_REG], r12
-	; r15b = state[core].Y;
-	mov	r15b, [r12]
-
-	; argptr[core][X_REF] = data + state[core].X;
-	lea	r12, [rsi + r14]
-	mov	[r11 + 8 * X_REF], r12
-
-	; argptr[core][Y_REF] = data + state[core].Y;
-	lea	r12, [rsi + r15]
-	mov	[r11 + 8 * Y_REF], r12
-	
-	; argptr[core][XD_REF] = data + state[core].X + state[core].D;
-	mov	al, r14b
-	add	al, r13b
-	lea	r12, [rsi + rax]
-	mov	[r11 + 8 * XD_REF], r12
-
-	; argptr[core][YD_REF] = data + state[core].Y + state[core].D;
-	mov	al, r15b
-	add	al, r13b
-	lea	r12, [rsi + rax]
-	mov	[r11 + 8 * YD_REF], r12
-	; ---------------------------------------
-
-	xor	r10, r10
 	xor	r12, r12
 	xor	r13, r13
 	xor	r14, r14
@@ -177,8 +128,13 @@ next:
 	add	rax, [rax + 8 * r12]
 	jmp	rax
 before_binary_op:
-	mov	r14, [r11 + 8 * r14]	; r14 = argptr[core][arg1_code];
-	mov	r15, [r11 + 8 * r15]	; r15 = argptr[core][arg2_code];
+	mov	r11, r14
+	call	load_ptr
+	mov	r14, rax
+
+	mov	r11, r15
+	call 	load_ptr
+	mov	r15, rax
 
 	cmp	r13b, 8
 	je	xchg_op
@@ -191,9 +147,10 @@ before_binary_op:
 	add	rax, [rax + 8 * r13]
 	jmp	rax
 before_unary_op:
-	mov	r14, [r11 + 8 * r14] 	; r14 = argptr[core][arg1_code];
+	mov	r11, r14
+	call	load_ptr
+	mov	r14, rax
 
-	; swap(r13b, r15b)
 	xchg	r13b, r15b
 	; ------------------------------
 	; ----- SWITCH(UNARY_OP) -------
@@ -203,7 +160,7 @@ before_unary_op:
 	jmp	rax
 after:
 ignore:
-	jmp	next	
+	jmp	next
 done:
 	pop	r15
 	pop	r14
