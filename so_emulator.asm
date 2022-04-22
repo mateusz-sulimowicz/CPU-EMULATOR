@@ -28,33 +28,6 @@ section .data
 ; Dla kazdego rdzenia jego stan.
 cpu_state times CORES * SIZEOF_STATE db 0
 
-section .rodata
-
-op_type: 
-dw before_binary_op - op_type 
-dw before_unary_op - op_type
-dw cflag_op - op_type
-dw jmp_op - op_type
-
-binary_op:
-dw mov_op - binary_op
-dw ignore - binary_op
-dw or_op - binary_op
-dw ignore - binary_op
-dw add_op - binary_op
-dw sub_op - binary_op
-dw adc_op - binary_op
-dw sbb_op - binary_op
-
-unary_op:
-dw mov_op - unary_op
-dw ignore - unary_op
-dw ignore - unary_op
-dw xor_op - unary_op
-dw add_op - unary_op
-dw cmpi_op - unary_op
-dw rcr_op - unary_op
-
 section .text
 
 load_ptr:
@@ -175,6 +148,32 @@ done:
 ; --------------------------------------
 ; -------- POMOCNICZE ------------------
 ; --------------------------------------
+
+op_type: 
+dw before_binary_op - op_type 
+dw before_unary_op - op_type
+dw cflag_op - op_type
+dw jmp_op - op_type
+
+binary_op:
+dw mov_op - binary_op
+dw ignore - binary_op
+dw or_op - binary_op
+dw ignore - binary_op
+dw add_op - binary_op
+dw sub_op - binary_op
+dw adc_op - binary_op
+dw sbb_op - binary_op
+
+unary_op:
+dw mov_op - unary_op
+dw ignore - unary_op
+dw ignore - unary_op
+dw xor_op - unary_op
+dw add_op - unary_op
+dw cmpi_op - unary_op
+dw rcr_op - unary_op
+
 mov_op:
 	mov	[r14], r15b
 	jmp	after
