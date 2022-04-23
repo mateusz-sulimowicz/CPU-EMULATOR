@@ -4,6 +4,10 @@
 
 global so_emul
 
+%ifndef CORES
+%define CORES 1
+%endif
+
 A_REG		equ 0
 D_REG		equ 1
 X_REG		equ 2
@@ -12,6 +16,11 @@ PC_CT		equ 4
 C_FL		equ 6
 Z_FL		equ 7
 
+REGCODE_MAX	equ 3
+DATA_D_CODE_MAX	equ 6
+
+THREE_BIT_MASK	equ 7 
+XCHG_OP		equ 8
 BREAK_OP	equ 0xffff
 
 ; To jest stan procesora SO.
@@ -21,7 +30,7 @@ BREAK_OP	equ 0xffff
 ; uint8_t C, Z;
 ; }
 
-SIZEOF_STATE 	equ 8
+SIZEOF_STATE	equ 8
 
 section .data
 
@@ -31,13 +40,13 @@ cpu_state times CORES * SIZEOF_STATE db 0
 section .text
 
 load_ptr:
-	cmp	r11, 3
+	cmp	r11, REGCODE_MAX
 	ja	.load_dataptr
 	lea	rax, [r9 + r11]
 	ret
 .load_dataptr:
 	xor	rax, rax
-	cmp	r11, 6
+	cmp	r11, DATA_D_CODE_MAX
 	jb	.load_xy
 	mov	al, [r9 + D_REG]
 	sub	r11, 2
@@ -85,14 +94,14 @@ next:
 	je	done
 
 	mov	r13b, r12b 	      	; r13b = pole C.
-	shr	r12w, 8
+	shr	r12w, XCHG_OP
 
 	mov	r14b, r12b
-	and	r14b, 0x7 	      	; r14b = pole B.
+	and	r14b, THREE_BIT_MASK   	; r14b = pole B.
 	shr	r12w, 3
 
 	mov 	r15b, r12b
-	and	r15b, 0x7
+	and	r15b, THREE_BIT_MASK
 	shr	r12w, 3			; r15b = pole A.
 	; ------------------------------
 	; ----- SWITCH(OP_TYPE) --------
@@ -110,7 +119,7 @@ before_binary_op:
 	call 	load_ptr
 	mov	r15, rax
 
-	cmp	r13b, 8
+	cmp	r13b, XCHG_OP
 	je	xchg_op
 
 	mov	r15b, [r15] 		; r15b = *argptr[core][arg2_code];
